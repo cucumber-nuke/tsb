@@ -1,0 +1,192 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Size = UDim2.new(0, 200, 0, 30)
+cooldownFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+cooldownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+cooldownFrame.BorderSizePixel = 0
+cooldownFrame.Parent = screenGui
+
+local fillBar = Instance.new("Frame")
+fillBar.Size = UDim2.new(1, 0, 1, 0)
+fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+fillBar.BorderSizePixel = 0
+fillBar.Parent = cooldownFrame
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "SANS DODGE READY"
+statusText.TextColor3 = Color3.new(1, 1, 1)
+statusText.Font = Enum.Font.Arcade
+statusText.Parent = cooldownFrame
+
+-- 대사 목록
+local taunts = {
+    "you can't understand how this feels.",
+    "look. i gave up trying to go back a long time ago.",
+    "and getting to the surface doesn't really appeal anymore, either.",
+}
+
+-- 도구 생성
+local tool = Instance.new("Tool")
+tool.Name = "Sans Dodge"
+tool.RequiresHandle = true
+tool.CanBeDropped = false
+
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+
+-- 스킬 상태
+local isOnCooldown = false
+
+-- Sans 대화 소리 생성
+local function playSansSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://5416548293"
+    sound.Volume = 1
+    sound.PlaybackSpeed = 1.5
+    sound.Parent = player.Character.Head
+    sound:Play()
+    game:GetService("Debris"):AddItem(sound, 1)
+end
+
+-- 대사 표시 함수
+local function showTaunt(character, text, isDeathMessage)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = text
+    textLabel.TextColor3 = isDeathMessage and Color3.new(1, 0, 0) or Color3.new(1, 1, 1)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.Arcade
+    textLabel.Parent = billboard
+    
+    billboard.Parent = character.Head
+    
+    TweenService:Create(textLabel, TweenInfo.new(2), {TextTransparency = 1}):Play()
+    game:GetService("Debris"):AddItem(billboard, 2)
+end
+
+-- 쿨다운 UI 업데이트
+local function updateCooldownUI(enabled)
+    if enabled then
+        statusText.Text = "DODGING..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        local tween = TweenService:Create(fillBar, TweenInfo.new(12), {Size = UDim2.new(0, 0, 1, 0)})
+        tween:Play()
+        statusText.Text = "COOLING DOWN..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        
+        wait(12)
+        fillBar.Size = UDim2.new(1, 0, 1, 0)
+        statusText.Text = "SANS DODGE READY"
+        isOnCooldown = false
+    end
+end
+
+-- 회피 동작 함수
+local function dodge(character, direction)
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        local camera = workspace.CurrentCamera
+        local lookVector = camera.CFrame.LookVector
+        local rightVector = camera.CFrame.RightVector
+        
+        -- 카메라 방향에 따른 회피 방향 계산
+        local dodgeDirection = direction * rightVector * 25  -- 회피 거리 증가
+        
+        local targetPos = humanoidRootPart.Position + dodgeDirection
+        local tween = TweenService:Create(humanoidRootPart, 
+            TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),  -- 속도 증가
+            {CFrame = CFrame.new(targetPos, targetPos + lookVector)}
+        )
+        tween:Play()
+        return tween
+    end
+end
+
+-- 양손 들기 애니메이션
+local function playShrug()
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            local animation = Instance.new("Animation")
+            animation.AnimationId = "rbxassetid://507770677"
+            local animTrack = humanoid:LoadAnimation(animation)
+            animTrack:Play()
+            wait(2)
+            animTrack:Stop()
+        end
+    end
+end
+
+-- 죽음 애니메이션
+local function playDeathAnimation(character)
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                TweenService:Create(part, TweenInfo.new(2), {Transparency = 1}):Play()
+            end
+        end
+        
+        showTaunt(character, "...", true)
+        
+        wait(2)
+        humanoid.Health = 0
+    end
+end
+
+-- 좌클릭 이벤트
+tool.Activated:Connect(function()
+    local character = player.Character
+    if character and not isOnCooldown then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            isOnCooldown = true
+            
+            -- 20% 확률로 죽음
+            if math.random() <= 0.2 then
+                playDeathAnimation(character)
+                return
+            end
+            
+            -- 왼쪽 오른쪽 번갈아가며 5번 회피
+            for i = 1, 5 do
+                local direction = (i % 2 == 0) and 1 or -1
+                local tween = dodge(character, direction)
+                if tween then
+                    tween.Completed:Wait()
+                end
+            end
+            
+            -- 회피 후 동작
+            playShrug()
+            showTaunt(character, taunts[math.random(1, #taunts)], false)
+            playSansSound()
+            
+            -- 쿨다운 시작
+            updateCooldownUI(false)
+        end
+    end
+end)
+
+tool.Parent = player.Backpack
