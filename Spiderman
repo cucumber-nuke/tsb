@@ -1,0 +1,196 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- 웹 슈터 상태
+local webCount = 4
+local isWallRunning = false
+local lastWebTime = 0
+local isOnCooldown = false
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local webFrame = Instance.new("Frame")
+webFrame.Size = UDim2.new(0, 200, 0, 30)
+webFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+webFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+webFrame.BorderSizePixel = 0
+webFrame.Parent = screenGui
+
+local webBars = {}
+for i = 1, 4 do
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0.23, 0, 1, 0)
+    bar.Position = UDim2.new(0.02 + (0.25 * (i-1)), 0, 0, 0)
+    bar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+    bar.BorderSizePixel = 0
+    bar.Parent = webFrame
+    webBars[i] = bar
+end
+
+-- 도구 생성
+local tool = Instance.new("Tool")
+tool.Name = "Web Shooter"
+tool.RequiresHandle = true
+tool.CanBeDropped = false
+
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+
+-- 웹 생성 함수
+local function createWeb(startPos, endPos)
+    local web = Instance.new("Part")
+    web.Name = "Web"
+    web.Size = Vector3.new(0.2, 0.2, (endPos - startPos).Magnitude)
+    web.CFrame = CFrame.new(startPos:Lerp(endPos, 0.5), endPos)
+    web.Anchored = true
+    web.CanCollide = false
+    web.Material = Enum.Material.Neon
+    web.Color = Color3.new(1, 1, 1)
+    web.Parent = workspace
+    
+    spawn(function()
+        for i = 0, 1, 0.1 do
+            web.Transparency = i
+            wait(0.03)
+        end
+        web:Destroy()
+    end)
+    
+    return web
+end
+
+-- 웹 재충전 함수
+local function rechargeWeb(index)
+    local bar = webBars[index]
+    if bar then
+        bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        local rechargeTime = 5  -- 5초 재충전
+
+        spawn(function()
+            local tween = TweenService:Create(bar, 
+                TweenInfo.new(rechargeTime, Enum.EasingStyle.Linear), 
+                {BackgroundColor3 = Color3.fromRGB(0, 162, 255)}
+            )
+            tween:Play()
+            wait(rechargeTime)
+            webCount = webCount + 1
+        end)
+    end
+end
+
+-- 웹 슈팅 함수
+local function shootWeb()
+    if webCount <= 0 or isOnCooldown then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    local camera = workspace.CurrentCamera
+    local direction = camera.CFrame.LookVector
+    local startPos = humanoidRootPart.Position
+    local endPos = startPos + direction * 50  -- 거리 감소
+    
+    local web = createWeb(startPos, endPos)
+    
+    local tween = TweenService:Create(humanoidRootPart,
+        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {CFrame = CFrame.new(endPos)}
+    )
+    tween:Play()
+    
+    webCount = webCount - 1
+    rechargeWeb(webCount + 1)
+    
+    -- 사용 후 쿨타임
+    isOnCooldown = true
+    wait(0.8)  -- 0.8초 쿨타임
+    isOnCooldown = false
+end
+
+-- 벽 달리기 함수
+local function checkWallRun()
+    local character = player.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {character}
+    
+    local raycastResult = workspace:Raycast(
+        humanoidRootPart.Position,
+        humanoidRootPart.CFrame.RightVector * 3,
+        raycastParams
+    )
+    
+    if raycastResult then
+        isWallRunning = true
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = true
+        end
+    else
+        isWallRunning = false
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+end
+
+-- 벽 달리기 업데이트
+game:GetService("RunService").Heartbeat:Connect(function()
+    if isWallRunning then
+        local character = player.Character
+        if character then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                humanoidRootPart.Velocity = Vector3.new(
+                    humanoidRootPart.Velocity.X,
+                    5,
+                    humanoidRootPart.Velocity.Z
+                )
+            end
+        end
+    end
+end)
+
+-- 좌클릭 이벤트
+tool.Activated:Connect(function()
+    if not isOnCooldown and webCount > 0 then
+        shootWeb()
+    end
+end)
+
+-- 벽 달리기 체크
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        checkWallRun()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isWallRunning = false
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.PlatformStand = false
+            end
+        end
+    end
+end)
+
+tool.Parent = player.Backpack
