@@ -1,0 +1,267 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Size = UDim2.new(0, 200, 0, 30)
+cooldownFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+cooldownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+cooldownFrame.BorderSizePixel = 0
+cooldownFrame.Parent = screenGui
+
+local fillBar = Instance.new("Frame")
+fillBar.Size = UDim2.new(1, 0, 1, 0)
+fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+fillBar.BorderSizePixel = 0
+fillBar.Parent = cooldownFrame
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "ULTIMATE SPEED READY"
+statusText.TextColor3 = Color3.new(1, 1, 1)
+statusText.Font = Enum.Font.GothamBold
+statusText.Parent = cooldownFrame
+
+-- 새로운 매직 완드 생성
+local tool = Instance.new("Tool")
+tool.Name = "Ultimate Speed"
+tool.RequiresHandle = true
+tool.CanBeDropped = false
+
+-- 보이지 않는 핸들 생성
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+
+-- 스피드 활성화 상태
+local isSpeedActive = false
+local cooldown = false
+
+-- 실패 메시지 목록
+local failMessages = {
+    "You lose...",
+    "Why did you do that???",
+    "ahhh $#!T"
+}
+
+-- 이펙트 생성 함수
+local function createSpeedEffect(character)
+    local effect = Instance.new("ParticleEmitter")
+    effect.Texture = "rbxassetid://8159573967"
+    effect.Rate = 200
+    effect.Speed = NumberRange.new(20, 30)
+    effect.Lifetime = NumberRange.new(0.1, 0.3)
+    effect.SpreadAngle = Vector2.new(-180, 180)
+    effect.Color = ColorSequence.new(Color3.fromRGB(0, 162, 255))
+    effect.Parent = character.Torso
+    return effect
+end
+
+-- 잔상 생성 함수
+local function createAfterImage(character)
+    local clone = character:Clone()
+    clone:FindFirstChild("Humanoid"):Destroy()
+    
+    for _, part in pairs(clone:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            part.Anchored = true
+            part.Color = Color3.fromRGB(0, 162, 255)
+            part.Material = Enum.Material.Neon
+            part.Transparency = 0.5
+        end
+    end
+    
+    clone.Parent = workspace
+    
+    spawn(function()
+        for i = 0.5, 1, 0.1 do
+            for _, part in pairs(clone:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Transparency = i
+                end
+            end
+            wait(0.03)
+        end
+        clone:Destroy()
+    end)
+end
+
+-- 실패 메시지 표시 함수
+local function showFailMessage(position)
+    local message = Instance.new("BillboardGui")
+    message.Size = UDim2.new(0, 200, 0, 50)
+    message.StudsOffset = Vector3.new(0, 3, 0)
+    message.AlwaysOnTop = true
+    
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.Text = failMessages[math.random(1, #failMessages)]
+    text.TextColor3 = Color3.new(1, 0, 0)
+    text.TextScaled = true
+    text.Font = Enum.Font.GothamBold
+    text.Parent = message
+    
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.CanCollide = false
+    part.Transparency = 1
+    part.Position = position
+    part.Parent = workspace
+    message.Parent = part
+    
+    TweenService:Create(text, TweenInfo.new(2), {TextTransparency = 1}):Play()
+    TweenService:Create(part, TweenInfo.new(2), {Position = position - Vector3.new(0, 5, 0)}):Play()
+    
+    game:GetService("Debris"):AddItem(part, 2)
+end
+
+-- 쿨다운 UI 업데이트
+local function updateCooldownUI(enabled, extraTime)
+    if enabled then
+        statusText.Text = "ULTIMATE SPEED ACTIVE!"
+        fillBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        local cooldownTime = 16 + (extraTime or 0)
+        local tween = TweenService:Create(fillBar, TweenInfo.new(cooldownTime), {Size = UDim2.new(0, 0, 1, 0)})
+        tween:Play()
+        statusText.Text = "COOLING DOWN..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        
+        wait(cooldownTime)
+        fillBar.Size = UDim2.new(1, 0, 1, 0)
+        statusText.Text = "ULTIMATE SPEED READY"
+        fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        cooldown = false
+    end
+end
+
+-- 벽 체크 함수
+local function checkWall(character, direction)
+    local ray = Ray.new(character.Torso.Position, direction * 5)
+    local hit = workspace:FindPartOnRay(ray, character)
+    return hit ~= nil
+end
+
+-- 래그돌 상태 설정 함수
+local function setRagdoll(character, enabled)
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = enabled
+        for _, joint in pairs(character:GetDescendants()) do
+            if joint:IsA("Motor6D") then
+                joint.Enabled = not enabled
+            end
+        end
+    end
+end
+
+-- 소닉 스타일 애니메이션 함수
+local function playSonicAnimation(character)
+    local rightArm = character:FindFirstChild("Right Arm")
+    local leftArm = character:FindFirstChild("Left Arm")
+    local torso = character:FindFirstChild("Torso")
+    local originalRightC0 = rightArm.CFrame:toObjectSpace(torso.CFrame)
+    local originalLeftC0 = leftArm.CFrame:toObjectSpace(torso.CFrame)
+    
+    if rightArm and leftArm and torso then
+        spawn(function()
+            local startTime = tick()
+            local angle = 0
+            
+            -- 원래 위치 저장
+            local rightShoulder = torso:FindFirstChild("Right Shoulder")
+            local leftShoulder = torso:FindFirstChild("Left Shoulder")
+            local originalRightC0 = rightShoulder.C0
+            local originalLeftC0 = leftShoulder.C0
+            
+            while tick() - startTime < 3 do  -- 3초 동안 팔 흔들기
+                angle = angle + 0.3
+                
+                -- 팔 회전
+                rightShoulder.C0 = originalRightC0 * CFrame.Angles(math.sin(angle) * 1.5, 0, 0)
+                leftShoulder.C0 = originalLeftC0 * CFrame.Angles(math.sin(angle + math.pi) * 1.5, 0, 0)
+                
+                wait()
+            end
+            
+            -- 원래 위치로 복구
+            rightShoulder.C0 = originalRightC0
+            leftShoulder.C0 = originalLeftC0
+        end)
+    end
+end
+
+-- 좌클릭 이벤트 추가
+tool.Activated:Connect(function()
+    if not cooldown then
+        local character = player.Character
+        if character then
+            local torso = character:FindFirstChild("Torso")
+            local humanoid = character:FindFirstChild("Humanoid")
+            if torso and humanoid then
+                cooldown = true
+                isSpeedActive = true
+                
+                -- 소닉 스타일 준비 애니메이션
+                playSonicAnimation(character)
+                wait(3)  -- 팔 흔들기 애니메이션
+                
+                -- 달리기 준비 자세
+                wait(1)
+                
+                local speedEffect = createSpeedEffect(character)
+                local camera = workspace.CurrentCamera
+                local moving = true
+                local hitWall = false
+                local startTime = tick()
+                
+                spawn(function()
+                    while moving and isSpeedActive and (tick() - startTime) < 7 do
+                        local direction = camera.CFrame.LookVector
+                        direction = Vector3.new(direction.X, 0, direction.Z).Unit
+                        
+                        if checkWall(character, direction) then
+                            moving = false
+                            isSpeedActive = false
+                            hitWall = true
+                            
+                            setRagdoll(character, true)
+                            showFailMessage(torso.Position)
+                            
+                            wait(2)
+                            setRagdoll(character, false)
+                            break
+                        end
+                        
+                        if tick() % 0.2 < 0.1 then
+                            createAfterImage(character)
+                        end
+                        
+                        -- 소닉처럼 회전하면서 이동
+                        torso.CFrame = CFrame.new(torso.Position, torso.Position + direction)
+                        torso.CFrame = torso.CFrame * CFrame.Angles(0, math.pi/2, 0) + (direction * 20)
+                        
+                        wait(0.05)
+                    end
+                    
+                    speedEffect:Destroy()
+                    humanoid.WalkSpeed = 16
+                    isSpeedActive = false
+                    updateCooldownUI(false, hitWall and 10 or 0)
+                end)
+            end
+        end
+    end
+end)
+
+tool.Parent = player.Backpack
