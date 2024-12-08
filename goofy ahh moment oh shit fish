@@ -1,0 +1,122 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Size = UDim2.new(0, 200, 0, 30)
+cooldownFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+cooldownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+cooldownFrame.BorderSizePixel = 0
+cooldownFrame.Parent = screenGui
+
+local fillBar = Instance.new("Frame")
+fillBar.Size = UDim2.new(1, 0, 1, 0)
+fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+fillBar.BorderSizePixel = 0
+fillBar.Parent = cooldownFrame
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "FISH READY"
+statusText.TextColor3 = Color3.new(1, 1, 1)
+statusText.Font = Enum.Font.GothamBold
+statusText.Parent = cooldownFrame
+
+-- 도구 생성
+local tool = Instance.new("Tool")
+tool.Name = "Fish"
+tool.RequiresHandle = true
+tool.CanBeDropped = false
+
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+
+-- 상태 변수
+local isOnCooldown = false
+
+-- 래그돌 상태 설정 함수
+local function setRagdoll(character, enabled)
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = enabled
+        for _, joint in pairs(character:GetDescendants()) do
+            if joint:IsA("Motor6D") then
+                joint.Enabled = not enabled
+            end
+        end
+    end
+end
+
+-- 쿨다운 UI 업데이트
+local function updateCooldownUI(enabled)
+    if enabled then
+        statusText.Text = "SWIMMING..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        local tween = TweenService:Create(fillBar, TweenInfo.new(3), {Size = UDim2.new(0, 0, 1, 0)})
+        tween:Play()
+        statusText.Text = "COOLING DOWN..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        
+        wait(3)
+        fillBar.Size = UDim2.new(1, 0, 1, 0)
+        statusText.Text = "FISH READY"
+        isOnCooldown = false
+    end
+end
+
+-- 물고기 점프 함수
+local function fishJump()
+    local character = player.Character
+    if character and not isOnCooldown then
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        
+        if humanoidRootPart then
+            isOnCooldown = true
+            
+            -- 래그돌 상태로 전환
+            setRagdoll(character, true)
+            
+            -- 카메라 방향으로 날아가기
+            local direction = camera.CFrame.LookVector
+            local force = 100
+            
+            -- 초기 발사
+            humanoidRootPart.Velocity = direction * force + Vector3.new(0, 20, 0)
+            
+            -- 날아가는 동안 회전 없음
+            wait(0.5)
+            
+            -- 착지 후 퍼덕이기
+            spawn(function()
+                for i = 1, 8 do  -- 8번 퍼덕임
+                    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.rad(45), 0, 0)
+                    wait(0.1)
+                    humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(math.rad(-45), 0, 0)
+                    wait(0.1)
+                end
+                
+                wait(0.5)
+                setRagdoll(character, false)
+            end)
+            
+            -- 쿨다운 시작
+            updateCooldownUI(false)
+        end
+    end
+end
+
+-- 좌클릭 이벤트
+tool.Activated:Connect(fishJump)
+
+tool.Parent = player.Backpack
