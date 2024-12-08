@@ -1,0 +1,132 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Size = UDim2.new(0, 200, 0, 30)
+cooldownFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+cooldownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+cooldownFrame.BorderSizePixel = 0
+cooldownFrame.Parent = screenGui
+
+local fillBar = Instance.new("Frame")
+fillBar.Size = UDim2.new(1, 0, 1, 0)
+fillBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)  -- SSJG 빨간색
+fillBar.BorderSizePixel = 0
+fillBar.Parent = cooldownFrame
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "SSJG READY"
+statusText.TextColor3 = Color3.new(1, 1, 1)
+statusText.Font = Enum.Font.GothamBold
+statusText.Parent = cooldownFrame
+
+-- 도구 생성
+local tool = Instance.new("Tool")
+tool.Name = "SSJG Aura"
+tool.RequiresHandle = true
+tool.CanBeDropped = false
+
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+
+-- 상태 변수
+local isActive = false
+local isOnCooldown = false
+
+-- 오라 이펙트 생성 함수
+local function createAuraEffect(character)
+    local effects = {}
+    
+    -- 메인 오라
+    local aura = Instance.new("ParticleEmitter")
+    aura.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+    aura.LightEmission = 1
+    aura.LightInfluence = 0
+    aura.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 5),
+        NumberSequenceKeypoint.new(1, 7)
+    })
+    aura.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    aura.Rate = 50
+    aura.Rotation = NumberRange.new(-180, 180)
+    aura.RotSpeed = NumberRange.new(-30, 30)
+    aura.Speed = NumberRange.new(10, 15)
+    aura.SpreadAngle = Vector2.new(-180, 180)
+    aura.Texture = "rbxasset://textures/particles/fire_main.dds"
+    aura.Parent = character.HumanoidRootPart
+    table.insert(effects, aura)
+    
+    -- 빛나는 효과
+    local light = Instance.new("PointLight")
+    light.Color = Color3.fromRGB(255, 0, 0)
+    light.Range = 12
+    light.Brightness = 2
+    light.Parent = character.HumanoidRootPart
+    table.insert(effects, light)
+    
+    -- 추가 파티클
+    local sparkles = Instance.new("ParticleEmitter")
+    sparkles.Color = ColorSequence.new(Color3.fromRGB(255, 100, 100))
+    sparkles.Size = NumberSequence.new(0.5)
+    sparkles.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    sparkles.Rate = 20
+    sparkles.Speed = NumberRange.new(5, 10)
+    sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+    sparkles.Parent = character.HumanoidRootPart
+    table.insert(effects, sparkles)
+    
+    return effects
+end
+
+-- 효과 활성화 함수
+local function activateAura()
+    local character = player.Character
+    if character and not isOnCooldown and not isActive then
+        isActive = true
+        isOnCooldown = true
+        
+        -- 이펙트 생성
+        local effects = createAuraEffect(character)
+        
+        -- 5초 후 효과 제거
+        wait(5)
+        
+        for _, effect in ipairs(effects) do
+            effect:Destroy()
+        end
+        
+        isActive = false
+        
+        -- 쿨타임 시작
+        local tween = TweenService:Create(fillBar, TweenInfo.new(10), {Size = UDim2.new(0, 0, 1, 0)})
+        tween:Play()
+        statusText.Text = "COOLING DOWN..."
+        
+        wait(10)
+        fillBar.Size = UDim2.new(1, 0, 1, 0)
+        statusText.Text = "SSJG READY"
+        isOnCooldown = false
+    end
+end
+
+-- 좌클릭 이벤트
+tool.Activated:Connect(activateAura)
+
+tool.Parent = player.Backpack
