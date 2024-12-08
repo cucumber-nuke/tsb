@@ -1,0 +1,155 @@
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- GUI 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+
+local cooldownFrame = Instance.new("Frame")
+cooldownFrame.Size = UDim2.new(0, 200, 0, 30)
+cooldownFrame.Position = UDim2.new(0.5, -100, 0.8, 0)
+cooldownFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+cooldownFrame.BorderSizePixel = 0
+cooldownFrame.Parent = screenGui
+
+local fillBar = Instance.new("Frame")
+fillBar.Size = UDim2.new(1, 0, 1, 0)
+fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+fillBar.BorderSizePixel = 0
+fillBar.Parent = cooldownFrame
+
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "ULTRA INSTINCT READY"
+statusText.TextColor3 = Color3.new(1, 1, 1)
+statusText.Font = Enum.Font.GothamBold
+statusText.Parent = cooldownFrame
+
+-- 새로운 매직 완드 생성
+local wand = Instance.new("Tool")
+wand.Name = "Ultra Instinct"
+wand.Grip = CFrame.new(0, -10, 0)
+
+-- 보이지 않는 핸들 생성
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(1, 1, 1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = wand
+
+-- 울트라 인스팅트 활성화 상태
+local isUltraInstinctActive = false
+local cooldown = false
+
+-- 이펙트 생성 함수
+local function createEffect(character)
+    local effect = Instance.new("ParticleEmitter")
+    effect.Texture = "rbxassetid://6101261905"  -- 파란색 오라 이미지
+    effect.Rate = 50
+    effect.Speed = NumberRange.new(5, 10)
+    effect.Lifetime = NumberRange.new(0.5, 1)
+    effect.SpreadAngle = Vector2.new(-180, 180)
+    effect.Parent = character.HumanoidRootPart
+    return effect
+end
+
+-- 사운드 생성 함수
+local function playActivationSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://5416548293"  -- 적절한 활성화 사운드
+    sound.Volume = 1
+    sound.Parent = wand
+    sound:Play()
+    game:GetService("Debris"):AddItem(sound, 2)
+end
+
+-- 쿨다운 UI 업데이트
+local function updateCooldownUI(enabled)
+    if enabled then
+        statusText.Text = "ULTRA INSTINCT ACTIVE"
+        fillBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        local tween = TweenService:Create(fillBar, TweenInfo.new(10), {Size = UDim2.new(0, 0, 1, 0)})
+        tween:Play()
+        statusText.Text = "COOLING DOWN..."
+        fillBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        
+        wait(10)
+        fillBar.Size = UDim2.new(1, 0, 1, 0)
+        statusText.Text = "ULTRA INSTINCT READY"
+        fillBar.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+        cooldown = false
+    end
+end
+
+-- 좌클릭 이벤트 추가
+wand.Activated:Connect(function()
+    local character = player.Character
+    if character and not cooldown then
+        cooldown = true
+        isUltraInstinctActive = true
+        
+        -- 이펙트 및 사운드 재생
+        local effect = createEffect(character)
+        playActivationSound()
+        
+        -- UI 업데이트
+        updateCooldownUI(true)
+        
+        -- 5초 동안 울트라 인스팅트 활성화
+        wait(5)
+        
+        -- 비활성화
+        isUltraInstinctActive = false
+        effect:Destroy()
+        updateCooldownUI(false)
+    end
+end)
+
+-- 자동 회피 시스템
+game:GetService("RunService").Heartbeat:Connect(function()
+    if isUltraInstinctActive and player.Character then
+        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            -- 주변 적 탐지 및 회피 로직
+            local randomAngle = math.random() * math.pi * 2
+            local randomDistance = math.random(3, 5)  -- 이동 거리를 줄임
+            
+            -- 더 빠른 이동을 위해 CFrame 직접 설정
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.new(
+                math.cos(randomAngle) * randomDistance,
+                0,
+                math.sin(randomAngle) * randomDistance
+            )
+            
+            -- 짧은 대기 시간 추가
+            wait(0.1)  -- 대기 시간을 줄임
+        end
+    end
+end)
+
+-- 도구 장착/해제 시 애니메이션 제어
+wand.Equipped:Connect(function()
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid:SetAttribute("ToolNone", true)
+        end
+    end
+end)
+
+wand.Unequipped:Connect(function()
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid:SetAttribute("ToolNone", false)
+        end
+    end
+end)
+
+wand.Parent = player.Backpack
